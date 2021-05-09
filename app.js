@@ -2,10 +2,9 @@ const mongoose = require("mongoose");
 const axios = require("axios");
 
 const CountriesSummary = require("./models/countriesSummary");
-const AdminCountry = require("./models/adminCountry");
 const { MONGODB_URI, COVID_BASE_URL } = require("./constants");
 
-exports.app = async () => {
+const connectToDB = async () => {
   try {
     await mongoose.connect(MONGODB_URI, {
       useNewUrlParser: true,
@@ -14,9 +13,11 @@ exports.app = async () => {
       useFindAndModify: false,
     });
   } catch (error) {
-    return console.log(error);
+    console.log(error);
   }
+};
 
+const updateCountriesSummary = async () => {
   let countriesSummary;
   try {
     countriesSummary = await axios.get(COVID_BASE_URL + "/summary");
@@ -62,6 +63,14 @@ exports.app = async () => {
       }
     }
   });
+};
+
+// const updateCountrySummary = async () => {};
+
+exports.app = async () => {
+  await connectToDB();
+
+  await updateCountriesSummary();
 
   // let adminSelectedCountries;
   // try {
