@@ -85,11 +85,7 @@ const updateCountrySummary = async () => {
 
     console.log("slug :>> ", slug);
 
-    countrySummary = null;
-    from = null;
-    tempTo = null;
-    to = null;
-    countriesAxios = null;
+    countrySummary = from = tempTo = to = countriesAxios = null;
     try {
       countrySummary = await CountrySummary.findOne({ slug: slug });
     } catch (error) {
@@ -106,6 +102,9 @@ const updateCountrySummary = async () => {
       countrySummary = new CountrySummary({ slug: slug, countryData: [] });
     }
 
+    // console.log("countrySummary begining :>> ", countrySummary.slug);
+    // console.log("countrySummary begining :>> ", countrySummary.countryData);
+
     // one second added for case that from and to are the
     // same date so time of from and to need to be different
     // for the covid19 api not to fail
@@ -119,9 +118,9 @@ const updateCountrySummary = async () => {
       })
       .subtract(1, "days");
 
-    console.log("from :>> ", from.toISOString());
-    console.log("to :>> ", to.toISOString());
-    console.log("-------------------------------------------");
+    // console.log("from :>> ", from.toISOString());
+    // console.log("to :>> ", to.toISOString());
+    // console.log("-------------------------------------------");
 
     while (from.isSameOrBefore(to)) {
       if (to.diff(from, "days") >= INTERVAL_FROM_TO) {
@@ -130,22 +129,25 @@ const updateCountrySummary = async () => {
         tempTo = moment(to);
       }
 
+      // console.log("tempFrom :>> ", from.toISOString());
+      // console.log("tempTo :>> ", tempTo.toISOString());
+
       countriesAxios = null;
       try {
-        await waitInMilliSeconds(1000);
+        await waitInMilliSeconds(2000);
         countriesAxios = await axios.get(
           `${COVID_BASE_URL}/country/${slug}?from=${from.toISOString()}&to=${tempTo.toISOString()}`
         );
         countriesAxios = mergeSubCountries(countriesAxios.data);
 
-        console.log("countriesAxios :>> ", countriesAxios);
+        // console.log("countriesAxios :>> ", countriesAxios);
 
         countrySummary.countryData.push(...countriesAxios);
 
-        console.log(
-          "countrySummary.countryData :>> ",
-          countrySummary.countryData
-        );
+        // console.log(
+        //   "countrySummary.countryData :>> ",
+        //   countrySummary.countryData
+        // );
       } catch (error) {
         console.log("error :>> ", error);
         break;
@@ -153,17 +155,17 @@ const updateCountrySummary = async () => {
 
       from = moment(tempTo).add(1, "days");
 
-      console.log("+++++++++++++++++++++++++++++++++++++++++++");
+      // console.log("+++++++++++++++++++++++++++++++++++++++++++");
     }
 
     if (countrySummary.countryData.length) {
-      console.log(
-        "countrySummary.countryData final :>> ",
-        countrySummary.countryData
-      );
+      // console.log(
+      //   "countrySummary.countryData final :>> ",
+      //   countrySummary.countryData
+      // );
       try {
         await countrySummary.save();
-        console.log("save successful");
+        console.log(`country ${slug} saved successfully`);
       } catch (error) {
         console.log("error :>> ", error);
       }
