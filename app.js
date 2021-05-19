@@ -4,16 +4,8 @@ const moment = require("moment");
 const CountriesSummary = require("./models/countriesSummary");
 const CountrySummary = require("./models/countrySummary");
 const AdminCountry = require("./models/adminCountry");
-const {
-  COVID_BASE_URL,
-  BEGINING_DATE,
-  INTERVAL_FROM_TO,
-} = require("./constants");
-const {
-  connectToDB,
-  mergeSubCountries,
-  waitInMilliSeconds,
-} = require("./utils");
+const { COVID_BASE_URL, BEGINING_DATE } = require("./constants");
+const { connectToDB, fillDataFromTo } = require("./utils");
 
 const updateCountriesSummary = async () => {
   let countriesSummary;
@@ -64,8 +56,6 @@ const updateCountriesSummary = async () => {
 };
 
 const updateCountrySummary = async () => {
-  let slug, from, tempTo, to, countriesAxios, countrySummary;
-
   console.log("running updateCountrySummary");
 
   let adminSelectedCountries;
@@ -80,12 +70,22 @@ const updateCountrySummary = async () => {
     return console.log("error :>> ", error);
   }
 
+  let slug,
+    from,
+    tempTo,
+    to,
+    countriesAxios,
+    countrySummary,
+    returnArr,
+    index,
+    originalCountryDataLength;
+
   for (const country of adminSelectedCountries) {
     slug = country.slug;
 
     console.log("slug :>> ", slug);
 
-    countrySummary = from = tempTo = to = countriesAxios = null;
+    countrySummary = from = tempTo = to = countriesAxios = returnArr = null;
     try {
       countrySummary = await CountrySummary.findOne({ slug: slug });
     } catch (error) {
@@ -93,76 +93,110 @@ const updateCountrySummary = async () => {
       continue;
     }
 
+    returnArr = null;
+    originalCountryDataLength = 0;
+    from = moment(BEGINING_DATE);
+
     if (countrySummary && countrySummary.countryData.length) {
-      const lastElementIndex = countrySummary.countryData.length - 1;
-      const mostRecentDate = countrySummary.countryData[lastElementIndex].date;
-      from = moment(mostRecentDate).add(1, "days");
+      const { countryData } = countrySummary;
+
+      originalCountryDataLength = countryData.length;
+
+      index = 0;
+
+      console.log("countryData start length :>> ", countryData.length);
+
+      //begining
+      to = moment(countryData[index].date);
+
+      if (to.diff(from, "days") >= 1) {
+        console.log("begining");
+        console.log("from :>> ", from.toISOString());
+        console.log("to :>> ", to.toISOString());
+
+        returnArr = await fillDataFromTo(from, to.subtract(1, "days"), slug);
+
+        if (returnArr && returnArr.length) {
+          countryData.splice(index, 0, ...returnArr);
+          index += returnArr.length;
+
+          console.log("countryData begining length :>> ", countryData.length);
+        }
+      }
+
+      //middle
+      while (countryData[index + 1]) {
+        from = moment(countryData[index].date);
+        index++;
+        to = moment(countryData[index].date);
+
+        returnArr = null;
+
+        if (to.diff(from, "days") > 1) {
+          console.log("middle");
+          console.log("from :>> ", from.toISOString());
+          console.log("to :>> ", to.toISOString());
+
+          returnArr = await fillDataFromTo(
+            from.add(1, "days"),
+            to.subtract(1, "days"),
+            slug
+          );
+
+          console.log("returnArr :>> ", returnArr);
+
+          if (returnArr && returnArr.length) {
+            countryData.splice(index, 0, ...returnArr);
+            index += returnArr.length;
+
+            console.log("countryData middle length :>> ", countryData.length);
+          }
+        }
+      }
+
+      //end
+      from = moment(countryData[countryData.length - 1].date);
+      to = moment().subtract(1, "days");
+
+      if (to.diff(from, "days") >= 1) {
+        console.log("end");
+        console.log("from :>> ", from.toISOString());
+        console.log("to :>> ", to.toISOString());
+
+        returnArr = null;
+        returnArr = await fillDataFromTo(from.add(1, "days"), to, slug);
+
+        if (returnArr && returnArr.length) {
+          countryData.splice(countryData.length, 0, ...returnArr);
+
+          console.log("countryData end length :>> ", countryData.length);
+        }
+      }
     } else {
-      from = moment(BEGINING_DATE);
+      console.log(`country ${slug} will fill up from begining`);
+
+      to = moment().subtract(1, "days");
       countrySummary = new CountrySummary({ slug: slug, countryData: [] });
+      returnArr = await fillDataFromTo(from, to, slug);
+      countrySummary.countryData.push(...returnArr);
     }
+    console.log("-------------------------------------------");
+    console.log("-------------------------------------------");
+    console.log("country :>> ", slug);
+    console.log(
+      "countrySummary.countryData.length :>> ",
+      countrySummary.countryData.length
+    );
+    console.log("originalCountryDataLength :>> ", originalCountryDataLength);
+    console.log("-------------------------------------------");
+    console.log("-------------------------------------------");
+    console.log("\n\n");
 
-    // console.log("countrySummary begining :>> ", countrySummary.slug);
-    // console.log("countrySummary begining :>> ", countrySummary.countryData);
+    if (countrySummary.countryData.length > originalCountryDataLength) {
+      console.log(
+        `${countrySummary.countryData.length} > ${originalCountryDataLength}`
+      );
 
-    // one second added for case that from and to are the
-    // same date so time of from and to need to be different
-    // for the covid19 api not to fail
-    to = moment()
-      .utcOffset(0)
-      .set({
-        hour: 0,
-        minute: 0,
-        second: 1,
-        millisecond: 0,
-      })
-      .subtract(1, "days");
-
-    // console.log("from :>> ", from.toISOString());
-    // console.log("to :>> ", to.toISOString());
-    // console.log("-------------------------------------------");
-
-    while (from.isSameOrBefore(to)) {
-      if (to.diff(from, "days") >= INTERVAL_FROM_TO) {
-        tempTo = moment(from).add(INTERVAL_FROM_TO, "days");
-      } else {
-        tempTo = moment(to);
-      }
-
-      // console.log("tempFrom :>> ", from.toISOString());
-      // console.log("tempTo :>> ", tempTo.toISOString());
-
-      countriesAxios = null;
-      try {
-        await waitInMilliSeconds(2000);
-        countriesAxios = await axios.get(
-          `${COVID_BASE_URL}/country/${slug}?from=${from.toISOString()}&to=${tempTo.toISOString()}`
-        );
-        countriesAxios = mergeSubCountries(countriesAxios.data);
-
-        // console.log("countriesAxios :>> ", countriesAxios);
-
-        countrySummary.countryData.push(...countriesAxios);
-
-        // console.log(
-        //   "countrySummary.countryData :>> ",
-        //   countrySummary.countryData
-        // );
-      } catch (error) {
-        console.log("error :>> ", error);
-        break;
-      }
-
-      from = moment(tempTo).add(1, "days");
-
-      // console.log("+++++++++++++++++++++++++++++++++++++++++++");
-    }
-
-    if (countrySummary.countryData.length) {
-      // console.log(
-      //   "countrySummary.countryData final :>> ",
-      //   countrySummary.countryData
-      // );
       try {
         await countrySummary.save();
         console.log(`country ${slug} saved successfully`);
@@ -171,6 +205,8 @@ const updateCountrySummary = async () => {
       }
     }
   }
+
+  console.log("updateCountrySummary completed");
 };
 
 exports.app = async () => {
@@ -178,7 +214,7 @@ exports.app = async () => {
 
   await connectToDB();
 
-  // await updateCountriesSummary();
+  await updateCountriesSummary();
 
   await updateCountrySummary();
 };
