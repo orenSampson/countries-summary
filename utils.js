@@ -8,40 +8,6 @@ const {
   INTERVAL_FROM_TO,
 } = require("./constants");
 
-const mergeSubCountries = (arr) => {
-  if (arr.length > 1) {
-    let compactedArr = [];
-    compactedArr.push(arr[0]);
-    for (let i = 1; i < arr.length; i++) {
-      if (compactedArr[compactedArr.length - 1].Date === arr[i].Date) {
-        compactedArr[compactedArr.length - 1].Confirmed += arr[i].Confirmed;
-        compactedArr[compactedArr.length - 1].Deaths += arr[i].Deaths;
-      } else {
-        compactedArr.push(arr[i]);
-      }
-    }
-
-    arr = compactedArr;
-  }
-
-  arr = arr.map((element) => ({
-    date: new Date(element.Date),
-    totalConfirmed: element.Confirmed,
-    totalDeaths: element.Deaths,
-  }));
-
-  return arr;
-};
-
-const waitInMilliSeconds = (milliseconds) => {
-  return new Promise((resolve) =>
-    setTimeout(
-      () => resolve(`waited ${milliseconds} miliseconds `),
-      milliseconds
-    )
-  );
-};
-
 exports.connectToDB = async () => {
   try {
     await mongoose.connect(MONGODB_URI, {
@@ -107,4 +73,38 @@ exports.fillDataFromTo = async (from, to, slug) => {
   }
 
   return returnArr;
+};
+
+const waitInMilliSeconds = (milliseconds) => {
+  return new Promise((resolve) =>
+    setTimeout(
+      () => resolve(`waited ${milliseconds} miliseconds `),
+      milliseconds
+    )
+  );
+};
+
+const mergeSubCountries = (arr) => {
+  if (arr.length > 1) {
+    let compactedArr = [];
+    compactedArr.push(arr[0]);
+    for (let i = 1; i < arr.length; i++) {
+      if (compactedArr[compactedArr.length - 1].Date === arr[i].Date) {
+        compactedArr[compactedArr.length - 1].Confirmed += arr[i].Confirmed;
+        compactedArr[compactedArr.length - 1].Deaths += arr[i].Deaths;
+      } else {
+        compactedArr.push(arr[i]);
+      }
+    }
+
+    arr = compactedArr;
+  }
+
+  arr = arr.map((element) => ({
+    date: new Date(element.Date),
+    totalConfirmed: element.Confirmed,
+    totalDeaths: element.Deaths,
+  }));
+
+  return arr;
 };
